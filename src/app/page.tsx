@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Terminal, Zap, BookOpen, Github, RefreshCw, Database, ChevronDown, ChevronUp } from 'lucide-react';
 import { SearchBar } from '@/components/SearchBar';
@@ -52,6 +52,13 @@ const sampleCommands: Command[] = [
   },
 ];
 
+// Tipo para el conteo de uso de comandos
+interface CommandUsage {
+  command: string;
+  count: number;
+  lastUsed: string;
+}
+
 export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
@@ -59,6 +66,159 @@ export default function HomePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSupabaseConnected, setIsSupabaseConnected] = useState(false);
   const [showEditor, setShowEditor] = useState(false);
+
+  // Estados reactivos para historial y uso
+  const [commandHistory, setCommandHistory] = useState<string[]>([]);
+  const [commandUsage, setCommandUsage] = useState<CommandUsage[]>([]);
+  const [editorInput, setEditorInput] = useState<{ value: string; timestamp: number }>({ value: '', timestamp: 0 });
+
+  // Cargar historial y uso desde localStorage (con limpieza de datos inválidos)
+  useEffect(() => {
+    const savedHistory = localStorage.getItem('lsearch-command-history');
+    const savedUsage = localStorage.getItem('lsearch-command-usage');
+
+    if (savedHistory) {
+      try {
+        const parsed = JSON.parse(savedHistory) as string[];
+        // Limpiar historial de comandos inválidos
+        const cleanedHistory = parsed.filter(cmd => {
+          // Debe tener al menos comando + argumento
+          const parts = cmd.trim().split(/\s+/);
+          if (parts.length < 2) return false;
+          // No debe terminar en guión suelto
+          if (cmd.endsWith('-') || cmd.endsWith('- ')) return false;
+          return true;
+        });
+        // También eliminar duplicados y subconjuntos
+        const deduped = cleanedHistory.reduce((acc: string[], curr) => {
+          // Verificar si ya existe una versión más larga o es un subconjunto
+          const isDuplicate = acc.some(existing =>
+            existing.startsWith(curr) || curr.startsWith(existing)
+          );
+          if (!isDuplicate) {
+            acc.push(curr);
+          } else {
+            // Si el actual es más largo, reemplazar
+            const existingIndex = acc.findIndex(e => curr.startsWith(e));
+            if (existingIndex !== -1 && curr.length > acc[existingIndex].length) {
+              acc[existingIndex] = curr;
+            }
+          }
+          return acc;
+        }, []);
+        setCommandHistory(deduped);
+      } catch (e) {
+        console.log('Error parsing history');
+      }
+    }
+
+    if (savedUsage) {
+      try {
+        setCommandUsage(JSON.parse(savedUsage));
+      } catch (e) {
+        console.log('Error parsing usage');
+      }
+    }
+  }, []);
+
+  // Guardar historial en localStorage cuando cambia
+  useEffect(() => {
+    if (commandHistory.length > 0) {
+      localStorage.setItem('lsearch-command-history', JSON.stringify(commandHistory));
+    }
+  }, [commandHistory]);
+
+  // Guardar uso en localStorage cuando cambia
+  useEffect(() => {
+    if (commandUsage.length > 0) {
+      localStorage.setItem('lsearch-command-usage', JSON.stringify(commandUsage));
+    }
+  }, [commandUsage]);
+
+  // Callback cuando cambia el comando en el editor
+  const handleCommandChange = useCallback((command: string, fullInput: string) => {
+    // Validar que el comando no esté incompleto
+    // No guardar si termina en un guión suelto (argumento sin terminar)
+    if (fullInput.endsWith('-') || fullInput.endsWith('- ')) {
+      return; // No guardar comandos incompletos
+    }
+
+    // No guardar si solo es el comando base sin argumentos significativos
+    const parts = fullInput.trim().split(/\s+/);
+    if (parts.length < 2) {
+      return; // Esperar a que tenga al menos un argumento
+    }
+
+    // Actualizar historial de forma inteligente
+    setCommandHistory(prev => {
+      // Filtrar versiones anteriores del mismo comando base
+      // Esto evita tener "cat -n" y "cat -n -E" al mismo tiempo
+      const filteredHistory = prev.filter(h => {
+        const historyBase = h.trim().split(/\s+/)[0]?.toLowerCase();
+        // Si es el mismo comando base, verificar si el nuevo es una extensión
+        if (historyBase === command) {
+          // Si el nuevo input contiene al historial anterior, eliminar el anterior
+          if (fullInput.startsWith(h) || h.startsWith(fullInput)) {
+            return false; // Eliminar versiones anteriores/subconjuntos
+          }
+        }
+        return h !== fullInput; // Eliminar duplicados exactos
+      });
+
+      // Añadir al principio, máximo 10 entradas
+      return [fullInput, ...filteredHistory].slice(0, 10);
+    });
+
+    // Actualizar conteo de uso (solo contar el comando base, no cada variación)
+    setCommandUsage(prev => {
+      const existing = prev.find(u => u.command === command);
+      if (existing) {
+        return prev.map(u =>
+          u.command === command
+            ? { ...u, count: u.count + 1, lastUsed: new Date().toISOString() }
+            : u
+        ).sort((a, b) => b.count - a.count);
+      } else {
+        return [...prev, { command, count: 1, lastUsed: new Date().toISOString() }]
+          .sort((a, b) => b.count - a.count);
+      }
+    });
+  }, []);
+
+  // Insertar comando desde historial
+  const insertFromHistory = useCallback((cmd: string) => {
+    setEditorInput({ value: cmd, timestamp: Date.now() });
+  }, []);
+
+  // Abrir comando en el Editor de Comandos (desde las tarjetas)
+  const openInEditor = useCallback((commandText: string) => {
+    console.log('HomePage: openInEditor called with:', commandText);
+    // 1. Abrir el desplegable del Editor si no está abierto
+    setShowEditor(true);
+    // 2. Poner el comando en el editor con timestamp para forzar actualización
+    const newInput = { value: commandText, timestamp: Date.now() };
+    console.log('HomePage: setting editorInput to:', newInput);
+    setEditorInput(newInput);
+    // 3. Scroll suave hacia el editor
+    setTimeout(() => {
+      const editorSection = document.querySelector('[data-editor-section]');
+      console.log('HomePage: scrolling to editor section:', editorSection);
+      editorSection?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
+  }, []);
+
+  // Top 5 comandos más usados con datos de la BD
+  const topUsedCommands = useMemo(() => {
+    return commandUsage
+      .slice(0, 5)
+      .map(usage => {
+        const cmdData = commands.find(c => c.command.toLowerCase() === usage.command);
+        return {
+          ...usage,
+          description: cmdData?.description || 'Comando del sistema'
+        };
+      });
+  }, [commandUsage, commands]);
 
   // Filtrar comandos basado en búsqueda y categoría
   const filteredCommands = useMemo(() => {
@@ -164,7 +324,7 @@ export default function HomePage() {
       </section>
 
       {/* Command Editor Toggle */}
-      <section className="max-w-7xl mx-auto mb-8">
+      <section className="max-w-7xl mx-auto mb-8" data-editor-section>
         <button
           onClick={() => setShowEditor(!showEditor)}
           className="w-full flex items-center justify-between px-4 py-3 bg-gradient-to-r from-[#111827] to-[#0f172a] border border-[#1e293b] rounded-xl hover:border-[#00ff88]/30 transition-all group"
@@ -215,19 +375,32 @@ export default function HomePage() {
                       <h3 className="text-sm font-medium text-[#e2e8f0]">Historial Reciente</h3>
                     </div>
                     <div className="space-y-2">
-                      {['nmap -sV -sC target', 'grep -rni "password"', 'find / -perm -4000', 'aircrack-ng capture.cap', 'hydra -l admin -P pass.txt'].map((cmd, i) => (
-                        <button
-                          key={i}
-                          className="w-full text-left px-3 py-2 bg-[#0a0f1a] hover:bg-[#1e293b] rounded-lg text-xs font-mono text-[#94a3b8] hover:text-[#00ff88] transition-colors truncate"
-                          title={cmd}
-                        >
-                          <span className="text-[#00ff88] mr-2">$</span>{cmd}
-                        </button>
-                      ))}
+                      {commandHistory.length > 0 ? (
+                        commandHistory.slice(0, 5).map((cmd, i) => (
+                          <motion.button
+                            key={`${cmd}-${i}`}
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: i * 0.05 }}
+                            onClick={() => insertFromHistory(cmd)}
+                            className="w-full text-left px-3 py-2 bg-[#0a0f1a] hover:bg-[#1e293b] rounded-lg text-xs font-mono text-[#94a3b8] hover:text-[#00ff88] transition-colors truncate"
+                            title={cmd}
+                          >
+                            <span className="text-[#00ff88] mr-2">$</span>{cmd}
+                          </motion.button>
+                        ))
+                      ) : (
+                        <div className="text-center py-4">
+                          <p className="text-[11px] text-[#475569]">Empieza a escribir comandos</p>
+                          <p className="text-[10px] text-[#334155] mt-1">El historial aparecerá aquí</p>
+                        </div>
+                      )}
                     </div>
-                    <p className="text-[10px] text-[#475569] mt-3 text-center">
-                      Haz clic para insertar
-                    </p>
+                    {commandHistory.length > 0 && (
+                      <p className="text-[10px] text-[#475569] mt-3 text-center">
+                        Haz clic para insertar
+                      </p>
+                    )}
                   </div>
 
                   {/* Atajos de Teclado */}
@@ -278,7 +451,10 @@ export default function HomePage() {
 
                 {/* Panel Central - Editor */}
                 <div className="min-w-0">
-                  <CommandEditor />
+                  <CommandEditor
+                    onCommandChange={handleCommandChange}
+                    externalInput={editorInput}
+                  />
                 </div>
 
                 {/* Panel Derecho - Estadísticas y Populares */}
@@ -325,17 +501,35 @@ export default function HomePage() {
                       <h3 className="text-sm font-medium text-[#e2e8f0]">Más Usados</h3>
                     </div>
                     <div className="space-y-2">
-                      {commands.slice(0, 5).map((cmd, i) => (
-                        <div key={cmd.id} className="flex items-center gap-2">
-                          <span className="w-5 h-5 flex items-center justify-center bg-[#1e293b] rounded text-[10px] font-bold text-[#64748b]">
-                            {i + 1}
-                          </span>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-xs font-mono text-[#00ff88] truncate">{cmd.command}</div>
-                            <div className="text-[10px] text-[#475569] truncate">{cmd.description}</div>
-                          </div>
+                      {topUsedCommands.length > 0 ? (
+                        topUsedCommands.map((usage, i) => (
+                          <motion.div
+                            key={usage.command}
+                            className="flex items-center gap-2"
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ delay: i * 0.05 }}
+                          >
+                            <span className="w-5 h-5 flex items-center justify-center bg-[#1e293b] rounded text-[10px] font-bold text-[#64748b]">
+                              {i + 1}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-mono text-[#00ff88] truncate">{usage.command}</span>
+                                <span className="px-1.5 py-0.5 bg-[#ef4444]/20 rounded text-[9px] text-[#ef4444] font-bold">
+                                  {usage.count}x
+                                </span>
+                              </div>
+                              <div className="text-[10px] text-[#475569] truncate">{usage.description}</div>
+                            </div>
+                          </motion.div>
+                        ))
+                      ) : (
+                        <div className="text-center py-4">
+                          <p className="text-[11px] text-[#475569]">Sin estadísticas aún</p>
+                          <p className="text-[10px] text-[#334155] mt-1">Usa comandos para ver el ranking</p>
                         </div>
-                      ))}
+                      )}
                     </div>
                   </div>
 
@@ -399,6 +593,7 @@ export default function HomePage() {
                   key={command.id}
                   command={command}
                   index={index}
+                  onOpenInEditor={openInEditor}
                 />
               ))
             ) : (

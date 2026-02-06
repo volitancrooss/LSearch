@@ -2,12 +2,13 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Copy, Check, ChevronDown, ChevronUp, Terminal } from 'lucide-react';
+import { ChevronDown, ChevronUp, Terminal, Sparkles } from 'lucide-react';
 import type { Command } from '@/lib/types';
 
 interface CommandCardProps {
     command: Command;
     index: number;
+    onOpenInEditor?: (commandText: string) => void;
 }
 
 const categoryStyles: Record<string, { color: string; bgColor: string }> = {
@@ -25,16 +26,19 @@ const categoryStyles: Record<string, { color: string; bgColor: string }> = {
     scripting: { color: '#eab308', bgColor: 'rgba(234, 179, 8, 0.15)' },
 };
 
-export function CommandCard({ command, index }: CommandCardProps) {
-    const [copied, setCopied] = useState(false);
+export function CommandCard({ command, index, onOpenInEditor }: CommandCardProps) {
     const [expanded, setExpanded] = useState(false);
 
     const style = categoryStyles[command.category] || categoryStyles.files;
 
-    const copyCommand = async () => {
-        await navigator.clipboard.writeText(command.command);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+    const openInEditor = () => {
+        console.log('CommandCard: openInEditor called with:', command.command);
+        console.log('CommandCard: onOpenInEditor is:', typeof onOpenInEditor);
+        if (onOpenInEditor) {
+            onOpenInEditor(command.command);
+        } else {
+            console.warn('CommandCard: onOpenInEditor is not defined!');
+        }
     };
 
     const hasExamples = command.examples && command.examples.length > 0;
@@ -42,9 +46,7 @@ export function CommandCard({ command, index }: CommandCardProps) {
     const cardClass = 'relative p-5 rounded-xl bg-[#111827]/60 backdrop-blur-md border border-[#1e293b] transition-all duration-300 hover:shadow-lg hover:translate-y-[-2px]';
     const tagClass = 'px-2 py-0.5 rounded-md text-xs font-medium bg-white/5 text-[#64748b] border border-white/10';
     const expandBtnClass = 'flex items-center gap-2 mt-4 text-sm font-medium text-[#64748b] hover:text-white transition-colors';
-    const copyBtnClass = copied
-        ? 'p-2.5 rounded-lg transition-all duration-200 bg-[#00ff88]/20 text-[#00ff88]'
-        : 'p-2.5 rounded-lg transition-all duration-200 bg-white/5 text-[#64748b] hover:bg-white/10 hover:text-white';
+    const editorBtnClass = 'relative z-10 p-2.5 rounded-lg transition-all duration-200 bg-gradient-to-r from-[#00ff88]/20 to-[#00d4ff]/20 text-[#00ff88] hover:from-[#00ff88]/30 hover:to-[#00d4ff]/30 hover:scale-105 border border-[#00ff88]/30 cursor-pointer';
 
     return (
         <motion.div
@@ -67,8 +69,8 @@ export function CommandCard({ command, index }: CommandCardProps) {
                         <div className="flex items-center gap-3 mb-2">
                             <Terminal className="w-4 h-4" style={{ color: style.color }} />
                             <code
-                                className="text-xl font-bold font-mono text-white cursor-pointer hover:underline"
-                                onClick={copyCommand}
+                                className="text-xl font-bold font-mono text-white cursor-pointer hover:text-[#00ff88] transition-colors"
+                                onClick={openInEditor}
                             >
                                 {command.command}
                             </code>
@@ -90,30 +92,11 @@ export function CommandCard({ command, index }: CommandCardProps) {
                     <motion.button
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
-                        onClick={copyCommand}
-                        className={copyBtnClass}
+                        onClick={openInEditor}
+                        className={editorBtnClass}
+                        title="Abrir en Editor de Comandos"
                     >
-                        <AnimatePresence mode="wait">
-                            {copied ? (
-                                <motion.div
-                                    key="check"
-                                    initial={{ scale: 0 }}
-                                    animate={{ scale: 1 }}
-                                    exit={{ scale: 0 }}
-                                >
-                                    <Check className="w-4 h-4" />
-                                </motion.div>
-                            ) : (
-                                <motion.div
-                                    key="copy"
-                                    initial={{ scale: 0 }}
-                                    animate={{ scale: 1 }}
-                                    exit={{ scale: 0 }}
-                                >
-                                    <Copy className="w-4 h-4" />
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
+                        <Sparkles className="w-4 h-4" />
                     </motion.button>
                 </div>
 
@@ -150,7 +133,12 @@ export function CommandCard({ command, index }: CommandCardProps) {
                                 >
                                     <div className="mt-4 space-y-3">
                                         {command.examples.map((example, i) => (
-                                            <ExampleItem key={i} example={example} color={style.color} />
+                                            <ExampleItem
+                                                key={i}
+                                                example={example}
+                                                color={style.color}
+                                                onOpenInEditor={onOpenInEditor}
+                                            />
                                         ))}
                                     </div>
                                 </motion.div>
@@ -160,7 +148,7 @@ export function CommandCard({ command, index }: CommandCardProps) {
                 )}
 
                 <div
-                    className="absolute top-0 right-0 w-16 h-16 opacity-10 rounded-tr-xl"
+                    className="absolute top-0 right-0 w-16 h-16 opacity-10 rounded-tr-xl pointer-events-none"
                     style={{
                         background: `linear-gradient(135deg, transparent 50%, ${style.color} 50%)`
                     }}
@@ -170,31 +158,31 @@ export function CommandCard({ command, index }: CommandCardProps) {
     );
 }
 
-function ExampleItem({ example, color }: { example: { code: string; description: string }; color: string }) {
-    const [copied, setCopied] = useState(false);
-
-    const copy = async () => {
-        await navigator.clipboard.writeText(example.code);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+function ExampleItem({ example, color, onOpenInEditor }: {
+    example: { code: string; description: string };
+    color: string;
+    onOpenInEditor?: (commandText: string) => void;
+}) {
+    const openInEditor = () => {
+        onOpenInEditor?.(example.code);
     };
 
     return (
-        <div className="p-3 rounded-lg bg-black/30 border border-white/5">
+        <div className="p-3 rounded-lg bg-black/30 border border-white/5 hover:border-[#00ff88]/30 transition-colors">
             <div className="flex items-center justify-between gap-3 mb-1">
                 <code
-                    className="text-sm font-mono cursor-pointer hover:underline"
+                    className="text-sm font-mono cursor-pointer hover:text-[#00ff88] transition-colors"
                     style={{ color }}
-                    onClick={copy}
+                    onClick={openInEditor}
                 >
                     $ {example.code}
                 </code>
-                <button onClick={copy} className="p-1 rounded hover:bg-white/10 transition-colors">
-                    {copied ? (
-                        <Check className="w-3 h-3 text-[#00ff88]" />
-                    ) : (
-                        <Copy className="w-3 h-3 text-[#475569]" />
-                    )}
+                <button
+                    onClick={openInEditor}
+                    className="p-1.5 rounded-lg bg-[#00ff88]/10 hover:bg-[#00ff88]/20 transition-colors"
+                    title="Abrir en Editor"
+                >
+                    <Sparkles className="w-3 h-3 text-[#00ff88]" />
                 </button>
             </div>
             <p className="text-xs text-[#64748b]">{example.description}</p>

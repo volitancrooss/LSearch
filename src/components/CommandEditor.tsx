@@ -37,7 +37,13 @@ interface CommandPart {
     explanation?: string;
 }
 
-export default function CommandEditor() {
+// Props del componente
+interface CommandEditorProps {
+    onCommandChange?: (command: string, fullInput: string) => void;
+    externalInput?: { value: string; timestamp: number };
+}
+
+export default function CommandEditor({ onCommandChange, externalInput }: CommandEditorProps) {
     const [input, setInput] = useState('');
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
@@ -47,8 +53,21 @@ export default function CommandEditor() {
     const [isLoadingCommands, setIsLoadingCommands] = useState(true);
     const inputRef = useRef<HTMLTextAreaElement>(null);
     const suggestionsRef = useRef<HTMLDivElement>(null);
+    const lastReportedCommand = useRef<string>('');
+    const lastExternalTimestamp = useRef<number>(0);
 
-    // Cargar comandos desde la BD al montar
+    // Sincronizar externalInput cuando cambia desde padre (ej: clic en tarjeta o historial)
+    useEffect(() => {
+        if (externalInput && externalInput.timestamp > lastExternalTimestamp.current) {
+            lastExternalTimestamp.current = externalInput.timestamp;
+            setInput(externalInput.value);
+            // Focus con un pequeño delay para asegurar que el editor esté visible
+            setTimeout(() => {
+                inputRef.current?.focus();
+            }, 150);
+        }
+    }, [externalInput]);
+
     useEffect(() => {
         const loadCommands = async () => {
             try {
@@ -124,6 +143,30 @@ export default function CommandEditor() {
         const firstWord = input.trim().split(/\s+/)[0]?.toLowerCase() || '';
         return allCommands.get(firstWord) || null;
     }, [input, allCommands]);
+
+    // Notificar cambios de comando al padre con debounce para capturar argumentos
+    useEffect(() => {
+        const currentCommand = input.trim().split(/\s+/)[0]?.toLowerCase() || '';
+        const trimmedInput = input.trim();
+
+        // Solo procesar si hay un comando válido
+        if (!currentCommand || !allCommands.has(currentCommand)) {
+            return;
+        }
+
+        // Usar debounce para esperar a que el usuario termine de escribir argumentos
+        const timeoutId = setTimeout(() => {
+            // Solo notificar si el input actual es diferente al último reportado
+            // Esto permite capturar el comando completo con argumentos
+            if (trimmedInput !== lastReportedCommand.current && trimmedInput.length > 0) {
+                lastReportedCommand.current = trimmedInput;
+                onCommandChange?.(currentCommand, trimmedInput);
+            }
+        }, 800); // Esperar 800ms después de que el usuario deje de escribir
+
+        return () => clearTimeout(timeoutId);
+    }, [input, allCommands, onCommandChange]);
+
 
     // Obtener sugerencias (comandos o argumentos)
     const suggestions = useMemo((): Suggestion[] => {
