@@ -240,27 +240,66 @@ export default function HomePage() {
     }, {} as Record<string, number>);
   }, [commands]);
 
-  // Cargar comandos de Supabase al montar
-  useEffect(() => {
-    fetchCommands();
-  }, []);
-
-  const fetchCommands = async () => {
+  // Función para cargar comandos desde la API
+  const fetchCommands = useCallback(async () => {
+    console.log('fetchCommands: Iniciando carga de comandos...');
     setIsLoading(true);
     try {
       const res = await fetch('/api/commands');
+      console.log('fetchCommands: Response status:', res.status);
       if (res.ok) {
         const data = await res.json();
+        console.log('fetchCommands: Datos recibidos:', data.commands?.length || 0, 'comandos');
         if (data.commands && data.commands.length > 0) {
           setCommands(data.commands);
           setIsSupabaseConnected(true);
+          console.log('fetchCommands: Comandos actualizados correctamente');
         }
+      } else {
+        console.log('fetchCommands: Error en respuesta:', res.status, res.statusText);
       }
     } catch (error) {
+      console.log('fetchCommands: Error de red:', error);
       console.log('Usando datos de ejemplo - Supabase no configurado');
     }
     setIsLoading(false);
+    console.log('fetchCommands: Carga finalizada');
+  }, []);
+
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  // Sincronizar con NotebookLM (Endpoint POST)
+  const syncWithNotebookLM = async () => {
+    setIsSyncing(true);
+    try {
+      console.log('Iniciando sincronización con NotebookLM...');
+      const res = await fetch('/api/notebooklm', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ action: 'sync' }),
+      });
+
+      const data = await res.json();
+      console.log('Resultado de sincronización:', data);
+
+      if (data.success) {
+        // Recargar comandos después de sincronizar
+        fetchCommands();
+      } else {
+        console.error('Error en sincronización:', data.error);
+      }
+    } catch (error) {
+      console.error('Error al llamar a la API de sincronización:', error);
+    }
+    setIsSyncing(false);
   };
+
+  // Cargar comandos de Supabase al montar
+  useEffect(() => {
+    fetchCommands();
+  }, [fetchCommands]);
 
   return (
     <main className="min-h-screen px-4 py-12 sm:px-6 lg:px-8">
@@ -310,6 +349,17 @@ export default function HomePage() {
           >
             <RefreshCw className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} />
             Actualizar
+          </button>
+
+          <div className="w-px h-4 bg-[#1e293b]" />
+
+          <button
+            onClick={syncWithNotebookLM}
+            disabled={isSyncing}
+            className="flex items-center gap-1 text-xs text-[#a855f7] hover:text-[#c084fc] transition-colors disabled:opacity-50"
+          >
+            <Zap className={`w-3 h-3 ${isSyncing ? 'animate-pulse' : ''}`} />
+            {isSyncing ? 'Sincronizando...' : 'Sincronizar NotebookLM'}
           </button>
         </div>
       </motion.header>
@@ -580,7 +630,7 @@ export default function HomePage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
           >
-            Mostrando {filteredCommands.length} comando{filteredCommands.length !== 1 ? 's' : ''}
+            Cargando {filteredCommands.length} comando{filteredCommands.length !== 1 ? 's' : ''}...
             {searchQuery && <span> para &quot;{searchQuery}&quot;</span>}
           </motion.p>
         </div>
@@ -647,6 +697,6 @@ export default function HomePage() {
         </div>
         <p>Construido con Next.js, Supabase y NotebookLM MCP</p>
       </motion.footer>
-    </main>
+    </main >
   );
 }
