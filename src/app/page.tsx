@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Terminal, Zap, BookOpen, Github, RefreshCw, Database } from 'lucide-react';
+import { Terminal, Zap, BookOpen, Github, RefreshCw, Database, ChevronDown, ChevronUp } from 'lucide-react';
 import { SearchBar } from '@/components/SearchBar';
 import { CommandCard } from '@/components/CommandCard';
 import { CategoryFilter } from '@/components/CategoryFilter';
+import CommandEditor from '@/components/CommandEditor';
 import type { Command, Category } from '@/lib/types';
 
 // Datos de ejemplo - serán reemplazados por datos de Supabase
@@ -57,6 +58,7 @@ export default function HomePage() {
   const [commands, setCommands] = useState<Command[]>(sampleCommands);
   const [isLoading, setIsLoading] = useState(false);
   const [isSupabaseConnected, setIsSupabaseConnected] = useState(false);
+  const [showEditor, setShowEditor] = useState(false);
 
   // Filtrar comandos basado en búsqueda y categoría
   const filteredCommands = useMemo(() => {
@@ -159,6 +161,211 @@ export default function HomePage() {
           onChange={setSearchQuery}
           placeholder="Buscar cualquier comando..."
         />
+      </section>
+
+      {/* Command Editor Toggle */}
+      <section className="max-w-7xl mx-auto mb-8">
+        <button
+          onClick={() => setShowEditor(!showEditor)}
+          className="w-full flex items-center justify-between px-4 py-3 bg-gradient-to-r from-[#111827] to-[#0f172a] border border-[#1e293b] rounded-xl hover:border-[#00ff88]/30 transition-all group"
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-[#00ff88]/10 rounded-lg">
+              <Terminal className="w-5 h-5 text-[#00ff88]" />
+            </div>
+            <div className="text-left">
+              <h3 className="text-sm font-medium text-[#e2e8f0] group-hover:text-[#00ff88] transition-colors">
+                Editor de Comandos Inteligente
+              </h3>
+              <p className="text-xs text-[#64748b]">
+                Autocompletado con explicación de cada argumento
+              </p>
+            </div>
+          </div>
+          <motion.div
+            animate={{ rotate: showEditor ? 180 : 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <ChevronDown className="w-5 h-5 text-[#64748b] group-hover:text-[#00ff88]" />
+          </motion.div>
+        </button>
+
+        <AnimatePresence>
+          {showEditor && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.3 }}
+              className="mt-4 overflow-hidden"
+            >
+              {/* Layout con paneles laterales */}
+              <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr_280px] gap-4">
+
+                {/* Panel Izquierdo - Historial y Atajos */}
+                <div className="hidden lg:flex flex-col gap-4">
+                  {/* Historial Reciente */}
+                  <div className="bg-[#111827] border border-[#1e293b] rounded-xl p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="p-1.5 bg-[#a855f7]/10 rounded-lg">
+                        <svg className="w-4 h-4 text-[#a855f7]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                      <h3 className="text-sm font-medium text-[#e2e8f0]">Historial Reciente</h3>
+                    </div>
+                    <div className="space-y-2">
+                      {['nmap -sV -sC target', 'grep -rni "password"', 'find / -perm -4000', 'aircrack-ng capture.cap', 'hydra -l admin -P pass.txt'].map((cmd, i) => (
+                        <button
+                          key={i}
+                          className="w-full text-left px-3 py-2 bg-[#0a0f1a] hover:bg-[#1e293b] rounded-lg text-xs font-mono text-[#94a3b8] hover:text-[#00ff88] transition-colors truncate"
+                          title={cmd}
+                        >
+                          <span className="text-[#00ff88] mr-2">$</span>{cmd}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-[#475569] mt-3 text-center">
+                      Haz clic para insertar
+                    </p>
+                  </div>
+
+                  {/* Atajos de Teclado */}
+                  <div className="bg-[#111827] border border-[#1e293b] rounded-xl p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="p-1.5 bg-[#00d4ff]/10 rounded-lg">
+                        <svg className="w-4 h-4 text-[#00d4ff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                        </svg>
+                      </div>
+                      <h3 className="text-sm font-medium text-[#e2e8f0]">Atajos de Teclado</h3>
+                    </div>
+                    <div className="space-y-2">
+                      {[
+                        { keys: ['↑', '↓'], action: 'Navegar sugerencias' },
+                        { keys: ['Tab'], action: 'Autocompletar' },
+                        { keys: ['Enter'], action: 'Seleccionar' },
+                        { keys: ['Esc'], action: 'Cerrar panel' },
+                        { keys: ['Ctrl', 'C'], action: 'Copiar comando' },
+                      ].map((shortcut, i) => (
+                        <div key={i} className="flex items-center justify-between text-xs">
+                          <span className="text-[#94a3b8]">{shortcut.action}</span>
+                          <div className="flex gap-1">
+                            {shortcut.keys.map((key, j) => (
+                              <kbd key={j} className="px-1.5 py-0.5 bg-[#1e293b] border border-[#334155] rounded text-[10px] text-[#64748b] font-mono">
+                                {key}
+                              </kbd>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Tips */}
+                  <div className="bg-gradient-to-br from-[#00ff88]/5 to-[#00d4ff]/5 border border-[#00ff88]/20 rounded-xl p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <svg className="w-4 h-4 text-[#00ff88]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                      </svg>
+                      <h3 className="text-xs font-medium text-[#00ff88]">Tip del día</h3>
+                    </div>
+                    <p className="text-[11px] text-[#94a3b8] leading-relaxed">
+                      Usa <code className="px-1 py-0.5 bg-[#1e293b] rounded text-[#00d4ff]">nmap -sV</code> para detectar versiones de servicios y encontrar vulnerabilidades conocidas.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Panel Central - Editor */}
+                <div className="min-w-0">
+                  <CommandEditor />
+                </div>
+
+                {/* Panel Derecho - Estadísticas y Populares */}
+                <div className="hidden lg:flex flex-col gap-4">
+                  {/* Estadísticas */}
+                  <div className="bg-[#111827] border border-[#1e293b] rounded-xl p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="p-1.5 bg-[#fbbf24]/10 rounded-lg">
+                        <svg className="w-4 h-4 text-[#fbbf24]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                        </svg>
+                      </div>
+                      <h3 className="text-sm font-medium text-[#e2e8f0]">Estadísticas</h3>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-[#0a0f1a] rounded-lg p-3 text-center">
+                        <div className="text-2xl font-bold text-[#00ff88]">{commands.length}</div>
+                        <div className="text-[10px] text-[#64748b]">Comandos</div>
+                      </div>
+                      <div className="bg-[#0a0f1a] rounded-lg p-3 text-center">
+                        <div className="text-2xl font-bold text-[#a855f7]">{Object.keys(categoryCounts).length}</div>
+                        <div className="text-[10px] text-[#64748b]">Categorías</div>
+                      </div>
+                      <div className="bg-[#0a0f1a] rounded-lg p-3 text-center">
+                        <div className="text-2xl font-bold text-[#00d4ff]">{categoryCounts['security'] || 0}</div>
+                        <div className="text-[10px] text-[#64748b]">Seguridad</div>
+                      </div>
+                      <div className="bg-[#0a0f1a] rounded-lg p-3 text-center">
+                        <div className="text-2xl font-bold text-[#fbbf24]">{categoryCounts['networking'] || 0}</div>
+                        <div className="text-[10px] text-[#64748b]">Redes</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Comandos Populares */}
+                  <div className="bg-[#111827] border border-[#1e293b] rounded-xl p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="p-1.5 bg-[#ef4444]/10 rounded-lg">
+                        <svg className="w-4 h-4 text-[#ef4444]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.879 16.121A3 3 0 1012.015 11L11 14H9c0 .768.293 1.536.879 2.121z" />
+                        </svg>
+                      </div>
+                      <h3 className="text-sm font-medium text-[#e2e8f0]">Más Usados</h3>
+                    </div>
+                    <div className="space-y-2">
+                      {commands.slice(0, 5).map((cmd, i) => (
+                        <div key={cmd.id} className="flex items-center gap-2">
+                          <span className="w-5 h-5 flex items-center justify-center bg-[#1e293b] rounded text-[10px] font-bold text-[#64748b]">
+                            {i + 1}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-mono text-[#00ff88] truncate">{cmd.command}</div>
+                            <div className="text-[10px] text-[#475569] truncate">{cmd.description}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Categorías Rápidas */}
+                  <div className="bg-[#111827] border border-[#1e293b] rounded-xl p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="p-1.5 bg-[#06b6d4]/10 rounded-lg">
+                        <svg className="w-4 h-4 text-[#06b6d4]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                        </svg>
+                      </div>
+                      <h3 className="text-sm font-medium text-[#e2e8f0]">Categorías</h3>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {Object.entries(categoryCounts).slice(0, 8).map(([cat, count]) => (
+                        <button
+                          key={cat}
+                          onClick={() => setSelectedCategory(cat as Category)}
+                          className="px-2 py-1 bg-[#1e293b] hover:bg-[#334155] rounded-lg text-[10px] text-[#94a3b8] hover:text-[#00ff88] transition-colors"
+                        >
+                          {cat} <span className="text-[#475569]">({count})</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </section>
 
       {/* Filtro de Categorías */}
