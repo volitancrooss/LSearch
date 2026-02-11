@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Terminal, Zap, BookOpen, Github, RefreshCw, Database, ChevronDown, ChevronUp } from 'lucide-react';
+import { Terminal, Zap, BookOpen, Github, RefreshCw, Database, ChevronDown, ChevronUp, Download } from 'lucide-react';
 import { SearchBar } from '@/components/SearchBar';
 import { CommandCard } from '@/components/CommandCard';
 import { CategoryFilter } from '@/components/CategoryFilter';
@@ -361,6 +361,17 @@ export default function HomePage() {
             <Zap className={`w-3 h-3 ${isSyncing ? 'animate-pulse' : ''}`} />
             {isSyncing ? 'Sincronizando...' : 'Sincronizar NotebookLM'}
           </button>
+
+          <div className="w-px h-4 bg-[#1e293b]" />
+
+          <a
+            href="/manual.pdf"
+            download="Manual_Usuario_LSearch.pdf"
+            className="flex items-center gap-1 text-xs text-[#00d4ff] hover:text-[#67e8f9] transition-colors"
+          >
+            <Download className="w-3 h-3" />
+            Manual
+          </a>
         </div>
       </motion.header>
 
